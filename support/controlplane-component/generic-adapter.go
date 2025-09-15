@@ -11,7 +11,8 @@ type Predicate func(cpContext WorkloadContext) bool
 type genericAdapter struct {
 	adapt             func(cpContext WorkloadContext, resource client.Object) error
 	predicate         Predicate
-	reconcileExisting bool // if true, causes the existing resource to be fetched before adapting
+	reconcileExisting bool      // if true, causes the existing resource to be fetched before adapting
+	keepManifest      Predicate // if true, an existing resource won't be deleted when `predicate` disables the resource.
 }
 
 type option func(*genericAdapter)
@@ -30,6 +31,12 @@ func WithPredicate(predicate Predicate) option {
 	}
 }
 
+func WithKeepManifest(predicate Predicate) option {
+	return func(ga *genericAdapter) {
+		ga.keepManifest = predicate
+	}
+}
+
 // ReconcileExisting can be used as an option when the existing resource should be fetched
 // and passed to the adapt function. This is necessary for resources such as certificates that
 // can result in a change every time we reconcile if we don't load the existing one first.
@@ -43,8 +50,11 @@ func (ga *genericAdapter) reconcile(cpContext ControlPlaneContext, obj client.Ob
 	workloadContext := cpContext.workloadContext()
 
 	if ga.predicate != nil && !ga.predicate(workloadContext) {
-		_, err := util.DeleteIfNeeded(cpContext, cpContext.Client, obj)
-		return err
+		if ga.keepManifest == nil || !ga.keepManifest(workloadContext) {
+			_, err := util.DeleteIfNeeded(cpContext, cpContext.Client, obj)
+			return err
+		}
+		return nil
 	}
 
 	if ga.reconcileExisting {

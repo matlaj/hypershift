@@ -54,6 +54,16 @@ func DisableIfAnnotationExist(annotation string) option {
 	})
 }
 
+// KeepManifestIfAnnotationExists can be used to prevent deletion of a disabled resource: DisableIfAnnotationExists().
+// This is useful, for example, when PKI Reconciliation is disabled:
+// Hypershift should not reconcile, but also should not delete user-created secrets.
+func KeepManifestIfAnnotationExists(annotation string) option {
+	return WithKeepManifest(func(cpContext WorkloadContext) bool {
+		_, exists := cpContext.HCP.Annotations[annotation]
+		return exists
+	})
+}
+
 // EnableForPlatform is a helper predicate for the common use case of only enabling a resource for a specific platform.
 func EnableForPlatform(platform hyperv1.PlatformType) option {
 	return WithPredicate(func(cpContext WorkloadContext) bool {

@@ -58,12 +58,14 @@ func NewComponent(releaseProvider releaseinfo.ProviderWithOpenShiftImageRegistry
 			"ca-cert.yaml",
 			component.WithAdaptFunction(adaptCACertSecret),
 			component.DisableIfAnnotationExist(hyperv1.DisablePKIReconciliationAnnotation),
+			component.KeepManifestIfAnnotationExists(hyperv1.DisablePKIReconciliationAnnotation),
 			component.ReconcileExisting(),
 		).
 		WithManifestAdapter(
 			"serving-cert.yaml",
 			component.WithAdaptFunction(adaptServingCertSecret),
 			component.DisableIfAnnotationExist(hyperv1.DisablePKIReconciliationAnnotation),
+			component.KeepManifestIfAnnotationExists(hyperv1.DisablePKIReconciliationAnnotation),
 			component.ReconcileExisting(),
 		).
 		Build()
