@@ -230,13 +230,13 @@ func TestReconcileIgnitionServer(t *testing.T) {
 		servingCert *corev1.Secret
 	}{
 		{
-			name:        "No extra annotations",
+			name:        "No certs, no extra annotations",
 			annotations: map[string]string{},
 			caCert:      nil,
 			servingCert: nil,
 		},
 		{
-			name: "DisablePKIReconciliation annotation and premade certs",
+			name: "Premade certs, DisablePKIReconciliation annotation present",
 			annotations: map[string]string{
 				hyperv1.DisablePKIReconciliationAnnotation: "true",
 			},
@@ -262,7 +262,7 @@ func TestReconcileIgnitionServer(t *testing.T) {
 			},
 		},
 		{
-			name: "DisablePKIReconciliation annotation and no certs",
+			name: "No certs, DisablePKIReconciliation annotation present",
 			annotations: map[string]string{
 				hyperv1.DisablePKIReconciliationAnnotation: "true",
 			},

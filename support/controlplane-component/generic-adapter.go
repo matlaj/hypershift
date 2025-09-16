@@ -1,8 +1,13 @@
 package controlplanecomponent
 
 import (
+	"github.com/openshift/hypershift/support/config"
 	"github.com/openshift/hypershift/support/util"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+
+	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -11,8 +16,7 @@ type Predicate func(cpContext WorkloadContext) bool
 type genericAdapter struct {
 	adapt             func(cpContext WorkloadContext, resource client.Object) error
 	predicate         Predicate
-	reconcileExisting bool      // if true, causes the existing resource to be fetched before adapting
-	keepManifest      Predicate // if true, an existing resource won't be deleted when `predicate` disables the resource.
+	reconcileExisting bool // if true, causes the existing resource to be fetched before adapting
 }
 
 type option func(*genericAdapter)
@@ -31,12 +35,6 @@ func WithPredicate(predicate Predicate) option {
 	}
 }
 
-func WithKeepManifest(predicate Predicate) option {
-	return func(ga *genericAdapter) {
-		ga.keepManifest = predicate
-	}
-}
-
 // ReconcileExisting can be used as an option when the existing resource should be fetched
 // and passed to the adapt function. This is necessary for resources such as certificates that
 // can result in a change every time we reconcile if we don't load the existing one first.
@@ -50,8 +48,20 @@ func (ga *genericAdapter) reconcile(cpContext ControlPlaneContext, obj client.Ob
 	workloadContext := cpContext.workloadContext()
 
 	if ga.predicate != nil && !ga.predicate(workloadContext) {
-		if ga.keepManifest == nil || !ga.keepManifest(workloadContext) {
-			_, err := util.DeleteIfNeeded(cpContext, cpContext.Client, obj)
+		// get the existing object to read its ownerRefs
+		existing := obj.DeepCopyObject().(client.Object)
+		err := cpContext.Client.Get(cpContext, client.ObjectKeyFromObject(obj), existing)
+
+		if err == nil {
+			objOwnerRefs := existing.GetOwnerReferences()
+			ownerRefHCP := config.OwnerRefFrom(cpContext.HCP)
+			if capiutil.HasOwnerRef(objOwnerRefs, *ownerRefHCP.Reference) {
+				// delete the object only if it has HCP ownerRef
+				_, err := util.DeleteIfNeeded(cpContext, cpContext.Client, obj)
+				return err
+			}
+			return nil
+		} else if !apierrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 			return err
 		}
 		return nil
