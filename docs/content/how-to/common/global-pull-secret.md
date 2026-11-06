@@ -16,14 +16,14 @@ In addition to the worker-node path, HCCO maintains a `combined-pull-secret` in 
 
 ## Platform and NodePool eligibility
 
-HCCO reconciles Global Pull Secret resources for **every** hosted cluster platform: it always maintains `kube-system/original-pull-secret` (and optional `global-pull-secret`), RBAC, and the `global-pull-secret-syncer` DaemonSet **object** in the data plane.
+HCCO reconciles Global Pull Secret resources on **AWS**, **Azure**, and **IBM Cloud** hosted clusters: it always maintains `kube-system/original-pull-secret` (and optional `global-pull-secret`), RBAC, and the `global-pull-secret-syncer` DaemonSet **object** in the data plane.
 
 The DaemonSet pod template uses `nodeAffinity` targeting either:
 
 - nodes labeled **`hypershift.openshift.io/nodepool-globalps-enabled=true`**, set by the HyperShift operator on **Machines** (and propagated by HCCO to **Nodes**) for **AWS** and **Azure** **Replace** NodePools, or
 - nodes labeled with **`karpenter.sh/nodepool`** (automatically present on all Karpenter-managed nodes).
 
-It does **not** match **InPlace** NodePools (to avoid conflicting with Machine Config Daemon on kubelet config), or **Replace** on other platforms such as **KubeVirt** (and other providers) in the current implementation—those workers therefore typically have **no** Global Pull Secret sync pods unless something else applies the label.
+It does **not** match **InPlace** NodePools (to avoid conflicting with Machine Config Daemon on kubelet config), or **Replace** on **IBM Cloud** in the current implementation—those workers therefore typically have **no** Global Pull Secret sync pods unless something else applies the label.
 
 For platforms without sync pods, pull credentials still come from **ignition/bootstrap** and from in-cluster Secrets (for example `openshift-config/pull-secret`); kubelet on-disk config is not updated by this DaemonSet on those nodes.
 
@@ -129,7 +129,7 @@ The Global Pull Secret functionality operates through a multi-component system:
 
     **AWS and Azure, Replace:** workers **are** labeled (via Machine → Node propagation), so sync pods **can** run and reconcile kubelet pull configuration from `original-pull-secret` / `global-pull-secret`.
 
-    **Other platforms (for example KubeVirt, GCP, Agent, …):** the DaemonSet object still exists in `kube-system`, but nodes usually **lack** the selector label, so you will typically see **no** (or very few) sync pods unless you set that label yourself.
+    **IBM Cloud:** the DaemonSet object still exists in `kube-system`, but nodes usually **lack** the selector label, so you will typically see **no** (or very few) sync pods unless you set that label yourself.
 
     See [Platform and NodePool eligibility](#platform-and-nodepool-eligibility) for the full picture.
 
