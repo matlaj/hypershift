@@ -4,7 +4,7 @@
 
 The Global Pull Secret functionality enables Hosted Cluster administrators to include additional pull secrets for accessing container images from private registries without requiring assistance from the Management Cluster administrator. This feature allows you to merge your custom pull secret with the original HostedCluster pull secret, making it available to nodes that run the sync DaemonSet.
 
-The implementation uses a DaemonSet that updates kubelet pull credentials on the node. The pull secret referenced by **`HostedCluster.spec.pullSecret`** is always copied from the HostedControlPlane into the guest cluster as the `original-pull-secret` Secret in `kube-system`. The `sync-global-pullsecret` process writes that content to `/var/lib/kubelet/config.json` on **eligible** worker nodes (see [Platform and NodePool eligibility](#platform-and-nodepool-eligibility)), even if you **never** create `additional-pull-secret`. In that baseline case there is no merge step: the kubelet file is kept aligned with the HostedCluster pull secret that HCCO reconciles into the data plane.
+The implementation uses a DaemonSet that updates kubelet pull credentials on the node. On [supported platforms](#platform-and-nodepool-eligibility), the pull secret referenced by **`HostedCluster.spec.pullSecret`** is always copied from the HostedControlPlane into the guest cluster as the `original-pull-secret` Secret in `kube-system`. The `sync-global-pullsecret` process writes that content to `/var/lib/kubelet/config.json` on **eligible** worker nodes (see [Platform and NodePool eligibility](#platform-and-nodepool-eligibility)), even if you **never** create `additional-pull-secret`. In that baseline case there is no merge step: the kubelet file is kept aligned with the HostedCluster pull secret that HCCO reconciles into the data plane.
 
 When you **do** create an `additional-pull-secret` in the `kube-system` namespace of your DataPlane (Hosted Cluster), the system merges it with the original HostedCluster pull secret and deploys the merged result via the same DaemonSet path (still preferring the original secret where registry entries conflict).
 
@@ -12,20 +12,24 @@ In addition to the worker-node path, HCCO maintains a `combined-pull-secret` in 
 
 !!! note
 
-    This feature is designed to work autonomously. With only `HostedCluster.spec.pullSecret`, the Hosted Cluster Config Operator (HCCO) still reconciles `original-pull-secret` and the DaemonSet object in the guest; sync pods run only on [eligible nodes](#platform-and-nodepool-eligibility). Creating `additional-pull-secret` is optional and only needed to add or layer registry credentials beyond the HostedCluster pull secret.
+    This feature is designed to work autonomously. On supported platforms, with only `HostedCluster.spec.pullSecret`, the Hosted Cluster Config Operator (HCCO) still reconciles `original-pull-secret` and the DaemonSet object in the guest; sync pods run only on [eligible nodes](#platform-and-nodepool-eligibility). Creating `additional-pull-secret` is optional and only needed to add or layer registry credentials beyond the HostedCluster pull secret.
 
 ## Platform and NodePool eligibility
 
-HCCO reconciles Global Pull Secret resources for **every** hosted cluster platform: it always maintains `kube-system/original-pull-secret` (and optional `global-pull-secret`), RBAC, and the `global-pull-secret-syncer` DaemonSet **object** in the data plane.
+HCCO runs the Global Pull Secret controller on **AWS**, **Azure**, and **IBM Cloud** hosted clusters. There it maintains `kube-system/original-pull-secret` (and optional `global-pull-secret`), RBAC, the `global-pull-secret-syncer` DaemonSet **object** in the data plane, and `combined-pull-secret` in the HostedControlPlane namespace.
+
+On **other platforms** (for example KubeVirt, GCP, Agent, OpenStack, PowerVS) the controller does not run: none of these resources are created, `additional-pull-secret` has no effect, and `combined-pull-secret` keeps the copy of the HostedCluster pull secret that the Control Plane Operator seeded when it was first created.
 
 The DaemonSet pod template uses `nodeAffinity` targeting either:
 
 - nodes labeled **`hypershift.openshift.io/nodepool-globalps-enabled=true`**, set by the HyperShift operator on **Machines** (and propagated by HCCO to **Nodes**) for **AWS** and **Azure** **Replace** NodePools, or
 - nodes labeled with **`karpenter.sh/nodepool`** (automatically present on all Karpenter-managed nodes).
 
-It does **not** match **InPlace** NodePools (to avoid conflicting with Machine Config Daemon on kubelet config), or **Replace** on other platforms such as **KubeVirt** (and other providers) in the current implementation—those workers therefore typically have **no** Global Pull Secret sync pods unless something else applies the label.
+It does **not** match **InPlace** NodePools (to avoid conflicting with Machine Config Daemon on kubelet config).
 
-For platforms without sync pods, pull credentials still come from **ignition/bootstrap** and from in-cluster Secrets (for example `openshift-config/pull-secret`); kubelet on-disk config is not updated by this DaemonSet on those nodes.
+On **IBM Cloud**, the HyperShift operator does not apply the label, so sync pods run only on nodes labeled `hypershift.openshift.io/nodepool-globalps-enabled=true` by other means.
+
+On nodes without sync pods, pull credentials still come from **ignition/bootstrap** and from in-cluster Secrets (for example `openshift-config/pull-secret`); kubelet on-disk config is not updated by this DaemonSet on those nodes.
 
 ## Adding your Pull Secret
 
@@ -129,7 +133,9 @@ The Global Pull Secret functionality operates through a multi-component system:
 
     **AWS and Azure, Replace:** workers **are** labeled (via Machine → Node propagation), so sync pods **can** run and reconcile kubelet pull configuration from `original-pull-secret` / `global-pull-secret`.
 
-    **Other platforms (for example KubeVirt, GCP, Agent, …):** the DaemonSet object still exists in `kube-system`, but nodes usually **lack** the selector label, so you will typically see **no** (or very few) sync pods unless you set that label yourself.
+    **IBM Cloud:** the DaemonSet object exists in `kube-system`, but sync pods only run on nodes labeled `hypershift.openshift.io/nodepool-globalps-enabled=true` by other means.
+
+    **Other platforms (for example KubeVirt, GCP, Agent, …):** the Global Pull Secret controller does not run, so there is no DaemonSet and `additional-pull-secret` has no effect.
 
     See [Platform and NodePool eligibility](#platform-and-nodepool-eligibility) for the full picture.
 

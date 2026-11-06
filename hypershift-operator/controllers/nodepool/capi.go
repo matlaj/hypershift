@@ -577,7 +577,8 @@ func (c *CAPI) propagateLabelsAndTaintsToMachines(ctx context.Context, log logr.
 
 			// Propagate globalPS managed label to Machines so the HCCO Node controller
 			// applies it to Nodes. This enables the GlobalPullSecret DaemonSet to
-			// schedule on Replace nodes. Only AWS and Azure platforms support this.
+			// schedule on Replace nodes. Only done for AWS and Azure; IBM Cloud workers are not
+			// CAPI-managed and must be labeled outside HyperShift.
 			if nodePool.Spec.Platform.Type == hyperv1.AWSPlatform || nodePool.Spec.Platform.Type == hyperv1.AzurePlatform {
 				globalPSLabelKey := fmt.Sprintf("%s.%s", labelManagedPrefix, globalPSNodeLabel)
 				machine.Labels[globalPSLabelKey] = "true"

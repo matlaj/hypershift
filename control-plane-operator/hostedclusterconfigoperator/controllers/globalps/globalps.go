@@ -63,8 +63,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req crreconcile.Request) (cr
 // - If at some point the user deletes the additional pull secret, the daemonSet will not be removed
 // If the PS doesn't exist, the HCCO doesn't do anything.
 //
-// IMPORTANT: The DaemonSet is ONLY deployed to nodes that are eligible (CAPI nodes explicitly labeled
-// as eligible or Karpenter-managed nodes, identified by the presence of the karpenter.sh/nodepool label).
+// IMPORTANT: The DaemonSet is ONLY deployed to nodes that are eligible (nodes explicitly labeled as
+// eligible — via CAPI Machines on AWS/Azure, or outside HyperShift on IBM Cloud — or Karpenter-managed
+// nodes, identified by the presence of the karpenter.sh/nodepool label).
 // Nodes belonging to NodePools using InPlace upgrade strategy are NOT labeled, preventing
 // conflicts between the DaemonSet's kubelet config modifications and Machine Config Daemon operations.
 func (r *Reconciler) reconcileGlobalPullSecret(ctx context.Context) error {

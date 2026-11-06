@@ -303,7 +303,10 @@ func (o *HostedClusterConfigOperator) Run(ctx context.Context) error {
 	}
 
 	controllersToRun := map[string]operator.ControllerSetupFunc{}
-	if o.platformType == string(hyperv1.AzurePlatform) || o.platformType == string(hyperv1.AWSPlatform) {
+	switch hyperv1.PlatformType(o.platformType) {
+	case hyperv1.AzurePlatform, hyperv1.AWSPlatform, hyperv1.IBMCloudPlatform:
+		// IBM Cloud workers are not CAPI-managed, so the HyperShift operator never labels them as
+		// globalps-eligible; sync pods only run on nodes labeled outside HyperShift.
 		controllersToRun[globalps.ControllerName] = globalps.Setup
 	}
 
